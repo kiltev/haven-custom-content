@@ -1,0 +1,11 @@
+*.png !text !filter !merge !diff
+*.jpg !text !filter !merge !diff
+*.jpeg !text !filter !merge !diff
+*.gif !text !filter !merge !diff
+*.psd !text !filter !merge !diff
+*.psb !text !filter !merge !diff
+*.ai !text !filter !merge !diff
+*.svg !text !filter !merge !diff
+*.eps !text !filter !merge !diff
+*.pdf !text !filter !merge !diff
+*.tiff !text !filter !merge !diff
