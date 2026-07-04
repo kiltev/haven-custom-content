@@ -48,10 +48,22 @@ local function poolExists()
   return nil
 end
 
+local function dbg(msg)
+  if CONFIG.ENABLE_DEBUG then log("[Rimearc] " .. msg) end
+end
+
+-- Find the anchor by name, preferring the sheet then the standee. Exclude self
+-- (the envelope) and anything named "...envelope" so we never anchor to it.
 local function findAnchor()
-  for _, o in ipairs(getObjectsWithTag(CONFIG.ANCHOR_TAG)) do
-    local n = o.getName()
-    if n and n:find(CONFIG.ANCHOR_NAME_CONTAINS, 1, true) then return o end
+  for _, tag in ipairs({ "Character Sheet", "Character" }) do
+    for _, o in ipairs(getObjectsWithTag(tag)) do
+      local n = o.getName() or ""
+      if o ~= self
+         and n:find(CONFIG.ANCHOR_NAME_CONTAINS, 1, true)
+         and not n:find("envelope", 1, true) then
+        return o, tag
+      end
+    end
   end
   return nil
 end
@@ -76,6 +88,7 @@ local function buildPool(anchor)
   if poolExists() then printToAll("[Rimearc] pool already exists", "Yellow"); return end
   if not tokenScript then printToAll("[Rimearc] token script not loaded", "Red"); return end
   if not anchor then printToAll("[Rimearc] no anchor", "Red"); return end
+  dbg("building pool at anchor " .. anchor.getName())
 
   local p = anchor.getPosition()
   local r = anchor.getTransformRight()
@@ -123,11 +136,16 @@ end
 -- Poll until the character sheet exists and holds still, then build once.
 local last, stable, tries = nil, 0, 0
 local function watch()
-  if done or poolExists() then done = true; return end
+  if done then return end
+  if poolExists() then dbg("pool already exists - watcher stopping"); done = true; return end
   if not tokenScript then Wait.time(watch, CONFIG.POLL_INTERVAL); return end
 
   tries = tries + 1
-  local anchor = findAnchor()
+  local anchor, foundTag = findAnchor()
+  if tries % 4 == 1 then
+    dbg("watch try " .. tries .. ": anchor=" .. (anchor and (anchor.getName() .. " [" .. foundTag .. "]") or "NONE") ..
+        " stable=" .. stable)
+  end
   if anchor then
     local p = anchor.getPosition()
     if last and math.abs(p.x - last.x) < 0.05 and math.abs(p.y - last.y) < 0.05
