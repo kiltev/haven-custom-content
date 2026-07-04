@@ -17,7 +17,7 @@ local CONFIG = {
   TOKEN_IMAGE = "https://i.imgur.com/W77V4kK.png",   -- transparent PNG
   TOKEN_TAGS  = { "Has Action", "Has Aid Tokens", "Has Conditions", "Has Health", "Terrain" },
 
-  TOKEN_SCALE          = { 0.6, 1, 0.6 },  -- final PULLED-OUT (map) size; TUNE.
+  TOKEN_SCALE          = { 0.3, 1, 0.3 },  -- token size (X/Z = diameter). Lower = smaller. TUNE.
   TOKEN_THICKNESS      = 0.2,
   TOKEN_MERGE_DISTANCE = 15,
 
@@ -27,12 +27,18 @@ local CONFIG = {
   ANCHOR_NAME_CONTAINS = "Arctic Zephyr",
 
   POOL_NAME   = "Rimearc Pool",
-  POOL_OFFSET = { 15, 2, 0 },              -- WORLD-space offset from the anchor; tune these 3 numbers.
+  -- WORLD-space offset from the anchor (character sheet/standee):
+  --   [1] X: + right,  - left
+  --   [2] Y: + up off the table (keep small so it rests on the table)
+  --   [3] Z: + far side of the play area,  - near you (the "bottom")
+  -- Was {15,2,0}. Tune these; the console logs the anchor + pool coords.
+  POOL_OFFSET = { 6, 1, -6 },
 
   POLL_INTERVAL = 0.5,
   MAX_TRIES     = 240,
 
-  ENABLE_DEBUG = true,
+  SHOW_REBUILD_BUTTON = false,   -- the debug button on the envelope
+  ENABLE_DEBUG        = true,    -- console logging only (invisible on the table)
 }
 
 local tokenScript = nil
@@ -98,15 +104,19 @@ local function tokenData(px, py, pz)
   return data
 end
 
+local buildCount = 0
+
 local function buildPool(anchor)
-  if poolExists() then printToAll("[Rimearc] pool already exists", "Yellow"); return end
   if not scriptReady() then printToAll("[Rimearc] token script not loaded", "Red"); return end
   if not anchor then printToAll("[Rimearc] no anchor", "Red"); return end
 
   local p = anchor.getPosition()
   local o = CONFIG.POOL_OFFSET
   local pos = { p.x + o[1], p.y + o[2], p.z + o[3] }
-  dbg("building pool at anchor " .. anchor.getName())
+  buildCount = buildCount + 1
+  local poolName = CONFIG.POOL_NAME .. " " .. buildCount
+  dbg(string.format("anchor '%s' pos=(%.2f, %.2f, %.2f) -> pool pos=(%.2f, %.2f, %.2f)",
+      anchor.getName(), p.x, p.y, p.z, pos[1], pos[2], pos[3]))
 
   spawnObject({
     type = "Infinite_Bag",
@@ -114,7 +124,7 @@ local function buildPool(anchor)
     sound = false,
     callback_function = function(bag)
       if not bag then printToAll("[Rimearc] bag spawn returned nil", "Red"); return end
-      bag.setName(CONFIG.POOL_NAME)
+      bag.setName(poolName)
 
       spawnObjectData({
         data = tokenData(pos[1], pos[2] + 3, pos[3]),
@@ -143,7 +153,6 @@ end
 local last, stable, tries = nil, 0, 0
 local function watch()
   if done then return end
-  if poolExists() then dbg("pool already exists - watcher stopping"); done = true; return end
   if not scriptReady() then Wait.time(watch, CONFIG.POLL_INTERVAL); return end
 
   tries = tries + 1
@@ -178,7 +187,7 @@ end
 -- ---- entry ------------------------------------------------------------
 
 function onLoad()
-  if CONFIG.ENABLE_DEBUG then
+  if CONFIG.SHOW_REBUILD_BUTTON then
     self.createButton({
       click_function = "onRebuildPool", function_owner = self,
       label = "Rebuild Rimearc Pool", position = { 0, 0.2, 2 },
@@ -198,12 +207,18 @@ function onLoad()
     end)
   end
 
-  Wait.time(watch, CONFIG.POLL_INTERVAL)
+  dbg("ready - builds a pool each time a tuckbox is pulled from the envelope")
+end
+
+-- Fires every time an object is pulled OUT of the envelope (self).
+function onObjectLeaveContainer(container, leaving)
+  if container ~= self then return end
+  dbg("object pulled from envelope: " .. tostring(leaving and leaving.getName()))
+  done, last, stable, tries = false, nil, 0, 0
+  Wait.time(watch, 0.5)
 end
 
 function onRebuildPool()
-  local existing = poolExists()
-  if existing then existing.destruct() end
   done, last, stable, tries = false, nil, 0, 0
   Wait.time(watch, 0.5)
 end
