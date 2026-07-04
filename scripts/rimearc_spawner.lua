@@ -69,20 +69,33 @@ local function findAnchor()
   return nil
 end
 
-local function dressTemplate(o)
-  o.setCustomObject({
-    image = CONFIG.TOKEN_IMAGE,
-    thickness = CONFIG.TOKEN_THICKNESS,
-    merge_distance = CONFIG.TOKEN_MERGE_DISTANCE,
-    stackable = false,
-  })
-  o.setName(CONFIG.TOKEN_NAME)
-  o.setTags(CONFIG.TOKEN_TAGS)
-  o.setScale(CONFIG.TOKEN_SCALE)
-  o.UI.setXml("<Panel />")
+-- Full object data so the token spawns FULLY FORMED (no "Custom Token" popup,
+-- and the image is baked in for the bag's stored template).
+local function tokenData(px, py, pz)
+  local s = CONFIG.TOKEN_SCALE
+  local data = {
+    Name = "Custom_Token",
+    Transform = {
+      posX = px, posY = py, posZ = pz,
+      rotX = 0, rotY = 0, rotZ = 0,
+      scaleX = s[1], scaleY = s[2], scaleZ = s[3],
+    },
+    Nickname = CONFIG.TOKEN_NAME,
+    Tags = CONFIG.TOKEN_TAGS,
+    CustomImage = {
+      ImageURL = CONFIG.TOKEN_IMAGE,
+      ImageSecondaryURL = "",
+      CustomToken = {
+        Thickness = CONFIG.TOKEN_THICKNESS,
+        MergeDistance = CONFIG.TOKEN_MERGE_DISTANCE,
+        Stackable = false,
+      },
+    },
+  }
   if CONFIG.USE_SHADOW_BUNDLE and tokenScript then
-    o.setLuaScript(tokenScript)
+    data.LuaScript = tokenScript
   end
+  return data
 end
 
 local function buildPool(anchor)
@@ -103,17 +116,10 @@ local function buildPool(anchor)
       if not bag then printToAll("[Rimearc] bag spawn returned nil", "Red"); return end
       bag.setName(CONFIG.POOL_NAME)
 
-      spawnObject({
-        type = "Custom_Token",
-        position = { pos[1], pos[2] + 3, pos[3] },
-        scale = CONFIG.TOKEN_SCALE,
-        sound = false,
+      spawnObjectData({
+        data = tokenData(pos[1], pos[2] + 3, pos[3]),
         callback_function = function(tok)
           if not tok then printToAll("[Rimearc] token spawn returned nil", "Red"); return end
-          local okDress, errDress = pcall(dressTemplate, tok)
-          if not okDress then
-            printToAll("[Rimearc] dress failed: " .. tostring(errDress), "Red"); return
-          end
 
           Wait.condition(function()
             local ok, err = pcall(function() bag.putObject(tok) end)
