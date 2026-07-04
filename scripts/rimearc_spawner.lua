@@ -43,6 +43,10 @@ local CONFIG = {
 
   -- Set false once the condition trigger is validated in-mod.
   ENABLE_TEST_BUTTON = true,
+
+  -- Temporary: adds a "Dump Debug" button + per-poll logging to reveal how the
+  -- applied condition is stored on the standee. Turn off once detection works.
+  ENABLE_DEBUG = true,
 }
 -- =======================================================================
 
@@ -126,12 +130,36 @@ local function poll()
   local standee = findStandee()
   if standee then
     local present = standeeHasCondition(standee)
+    if CONFIG.ENABLE_DEBUG then
+      local st = standee.script_state or ""
+      log("[Rimearc poll] standee='" .. standee.getName() .. "' state_len=" .. #st ..
+          " has('" .. CONFIG.CONDITION_NAME .. "')=" .. tostring(present))
+    end
     if present and not conditionWasPresent then
       spawnRimearc(standee)          -- edge trigger: absent -> present
     end
     conditionWasPresent = present
+  elseif CONFIG.ENABLE_DEBUG then
+    log("[Rimearc poll] standee NOT FOUND (name='" .. CONFIG.STANDEE_NAME ..
+        "', tag='" .. CONFIG.STANDEE_TAG .. "')")
   end
   Wait.time(poll, CONFIG.POLL_INTERVAL)
+end
+
+-- Prints the standee's full serialized state so we can see how the applied
+-- condition is encoded, then write a correct detector.
+function onDumpDebug()
+  local standee = findStandee()
+  if not standee then
+    printToAll("[Rimearc] standee '" .. CONFIG.STANDEE_NAME .. "' NOT FOUND", "Red")
+    return
+  end
+  printToAll("[Rimearc] tokenScript loaded=" .. tostring(tokenScript ~= nil), "White")
+  printToAll("[Rimearc] standee tags: " .. table.concat(standee.getTags(), ", "), "White")
+  local st = standee.script_state or ""
+  printToAll("[Rimearc] script_state length=" .. #st, "White")
+  log("[Rimearc] FULL script_state of '" .. standee.getName() .. "':")
+  log(st)
 end
 
 -- ---- entry ------------------------------------------------------------
@@ -144,6 +172,15 @@ function onLoad()
       label = "Spawn Rimearc", position = { 0, 0.5, 0 },
       width = 1200, height = 400, font_size = 200,
       color = { 0, 0, 0, 0.9 }, font_color = { 1, 1, 1, 1 },
+    })
+  end
+
+  if CONFIG.ENABLE_DEBUG then
+    self.createButton({
+      click_function = "onDumpDebug", function_owner = self,
+      label = "Dump Debug", position = { 0, 0.5, 1.2 },
+      width = 1000, height = 300, font_size = 160,
+      color = { 0.2, 0.2, 0.2, 0.9 }, font_color = { 1, 1, 0, 1 },
     })
   end
 
