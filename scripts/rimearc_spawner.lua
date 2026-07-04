@@ -32,13 +32,13 @@ local CONFIG = {
   --   [2] Y: + up off the table (keep small so it rests on the table)
   --   [3] Z: + far side of the play area,  - near you (the "bottom")
   -- Was {15,2,0}. Tune these; the console logs the anchor + pool coords.
-  POOL_OFFSET          = { 10, 1, -16 },
+  POOL_OFFSET          = { 14, 1, -26 },
 
   POLL_INTERVAL        = 0.5,
   MAX_TRIES            = 240,
 
   SHOW_REBUILD_BUTTON  = false, -- the debug button on the envelope
-  ENABLE_DEBUG         = true, -- console logging only (invisible on the table)
+  ENABLE_DEBUG         = true,  -- console logging only (invisible on the table)
 }
 
 local tokenScript = nil
