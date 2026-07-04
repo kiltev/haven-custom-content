@@ -44,6 +44,7 @@ end)(require)
 __bundle_register("__root", function(require, _LOADED, __bundle_register, __bundle_modules)
 -- ACTUAL CODE GOES HERE
 require("Overlays.BasicOverlay")
+    .withButtonPosition(0.02)
 -- ACTUAL CODE GOES HERE
 end)
 __bundle_register("Overlays.BasicOverlay", function(require, _LOADED, __bundle_register, __bundle_modules)
@@ -115,7 +116,6 @@ return BasicOverlay
 end)
 __bundle_register("Frames.ScenarioAid", function(require, _LOADED, __bundle_register, __bundle_modules)
 local BaseBar = require("Frames.BaseBar")
-local R = require("api.Resource")
 
 ---@class gloom_ScenarioAidBar : gloom_FigureBar
 
@@ -169,8 +169,6 @@ end
 function ScenarioAid.getTokens()
   return tokens
 end
-
-self.addTag(R.Tag.Trait.HasAidTokens)
 
 return ScenarioAid
 
@@ -519,7 +517,6 @@ return Frame
 end)
 __bundle_register("ActionElement", function(require, _LOADED, __bundle_register, __bundle_modules)
 local ActionApi = require("api.ActionApi")
-local R = require("api.Resource")
 
 --- An element that allows adding an action button.
 local ActionElement = {}
@@ -645,8 +642,6 @@ function setAction(newAction)
   ActionElement.load(newAction)
   saveNow()
 end
-
-self.addTag(R.Tag.Trait.HasAction)
 
 return ActionElement
 

@@ -1,0 +1,157 @@
+--[[ =========================================================================
+  Rimearc spawner  (design: R1 — custom condition as Quick-Menu trigger)
+
+  Delivery: inject this onto the "Arctyc Zephyr" character object via the CCC
+  perk trick (same vector as Dawnbringer/spawn_deck.lua). `self` = that object.
+
+  What it does, on load:
+    1. Registers the custom "Rimearc" condition (shows in the Quick Menu).
+    2. Fetches the tile's script (the cleaned token.lua) once and caches it.
+    3. Polls the class standee's state; on the Rimearc condition appearing
+       (absent -> present edge), imperatively spawns the Rimearc tile above
+       the standee's head, tagged + scripted + with the FHE overlay UI.
+
+  NOTE ON TRUST: like spawn_deck.lua, this replaces the host object's Lua and
+  runs code fetched from a raw URL. Same trust model you already use.
+============================================================================ ]]
+
+-- ============================== CONFIG ==================================
+local CONFIG = {
+  -- Custom condition (Quick Menu icon). Image reused from the token art.
+  CONDITION_NAME  = "Rimearc",
+  CONDITION_IMAGE = "https://i.imgur.com/W77V4kK.png",
+  CONDITION_MAX   = 1,
+
+  -- The spawned tile ("Rimearc").
+  TOKEN_NAME      = "Rimearc",
+  TOKEN_IMAGE     = "https://i.imgur.com/W77V4kK.png",
+  TOKEN_TAGS      = { "Has Action", "Has Aid Tokens", "Has Conditions" },
+  TOKEN_XML       = '<Include src="Overlays/Overlay.xml" />', -- mod-global include
+  TILE_TYPE       = 2,               -- Custom_Tile: 0 sq, 1 hex, 2 circle, 3 rounded
+  TOKEN_SCALE     = { 0.35, 1, 0.35 },-- ~28mm circle. TUNE in-mod to match standee base.
+  TOKEN_THICKNESS = 0.1,
+  SPAWN_OFFSET    = { 0, 2, 0 },     -- above the standee's head
+
+  -- Raw URL of the cleaned token.lua (the tile's attached script).
+  -- >>> set this to wherever you host scripts/token.lua <<<
+  TOKEN_SCRIPT_URL = "https://raw.githubusercontent.com/OWNER/REPO/main/scripts/token.lua",
+
+  -- Which figure to watch.
+  STANDEE_NAME  = "Arctyc Zephyr",
+  STANDEE_TAG   = "Character",
+  POLL_INTERVAL = 1,                 -- seconds
+
+  -- Set false once the condition trigger is validated in-mod.
+  ENABLE_TEST_BUTTON = true,
+}
+-- =======================================================================
+
+local tokenScript = nil    -- cached token.lua text
+local conditionWasPresent = false
+
+-- ---- helpers ----------------------------------------------------------
+
+local function findStandee()
+  for _, o in ipairs(getObjectsWithTag(CONFIG.STANDEE_TAG)) do
+    if o.getName() == CONFIG.STANDEE_NAME then return o end
+  end
+  -- fallback: match by name only
+  for _, o in ipairs(getObjects()) do
+    if o.getName() == CONFIG.STANDEE_NAME then return o end
+  end
+  return nil
+end
+
+-- Detect the condition by scanning the standee's serialized state.
+-- No FHE read-API exists, so this is the pragmatic detector (VALIDATE in-mod:
+-- confirm the condition name appears in the figure's script_state).
+local function standeeHasCondition(standee)
+  local state = standee.script_state
+  if not state or state == "" then return false end
+  return state:find(CONFIG.CONDITION_NAME, 1, true) ~= nil
+end
+
+local function spawnRimearc(standee)
+  if not tokenScript then
+    printToAll("[Rimearc] tile script not loaded yet - check TOKEN_SCRIPT_URL", "Yellow")
+    return
+  end
+  local p = standee and standee.getPosition() or self.getPosition()
+  local pos = { p.x + CONFIG.SPAWN_OFFSET[1], p.y + CONFIG.SPAWN_OFFSET[2], p.z + CONFIG.SPAWN_OFFSET[3] }
+
+  spawnObject({
+    type = "Custom_Tile",
+    position = pos,
+    rotation = { 0, 0, 0 },
+    scale = CONFIG.TOKEN_SCALE,
+    sound = false,
+    callback_function = function(o)
+      o.setCustomObject({
+        image = CONFIG.TOKEN_IMAGE,
+        type = CONFIG.TILE_TYPE,
+        thickness = CONFIG.TOKEN_THICKNESS,
+        stackable = false,
+      })
+      o.setName(CONFIG.TOKEN_NAME)
+      o.setTags(CONFIG.TOKEN_TAGS)
+      o.UI.setXml(CONFIG.TOKEN_XML)
+      o.setLuaScript(tokenScript)
+      o.reload()
+    end,
+  })
+end
+
+-- ---- FHE api ----------------------------------------------------------
+
+-- Register the condition via the same Global-call convention token.lua uses
+-- for api_action_*.  VALIDATE: if the icon never appears, the Global function
+-- name differs - report it and we adjust.
+local function registerCondition()
+  Global.call("api_condition_registerCondition", {
+    conditionName = CONFIG.CONDITION_NAME,
+    condition = { image = CONFIG.CONDITION_IMAGE, max = CONFIG.CONDITION_MAX },
+  })
+end
+
+-- ---- poll loop --------------------------------------------------------
+
+local function poll()
+  local standee = findStandee()
+  if standee then
+    local present = standeeHasCondition(standee)
+    if present and not conditionWasPresent then
+      spawnRimearc(standee)          -- edge trigger: absent -> present
+    end
+    conditionWasPresent = present
+  end
+  Wait.time(poll, CONFIG.POLL_INTERVAL)
+end
+
+-- ---- entry ------------------------------------------------------------
+
+function onLoad()
+  registerCondition()
+
+  WebRequest.get(CONFIG.TOKEN_SCRIPT_URL, function(r)
+    if r.text and not r.is_error then
+      tokenScript = r.text
+    else
+      printToAll("[Rimearc] failed to fetch token.lua: " .. tostring(r.error), "Red")
+    end
+  end)
+
+  if CONFIG.ENABLE_TEST_BUTTON then
+    self.createButton({
+      click_function = "onTestSpawn", function_owner = self,
+      label = "Spawn Rimearc", position = { 0, 0.5, 0 },
+      width = 1200, height = 400, font_size = 200,
+      color = { 0, 0, 0, 0.9 }, font_color = { 1, 1, 1, 1 },
+    })
+  end
+
+  Wait.time(poll, CONFIG.POLL_INTERVAL)
+end
+
+function onTestSpawn()
+  spawnRimearc(findStandee())
+end
