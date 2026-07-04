@@ -17,7 +17,7 @@ local CONFIG = {
   TOKEN_IMAGE          = "https://i.imgur.com/W77V4kK.png", -- transparent PNG
   TOKEN_TAGS           = { "Has Action", "Has Aid Tokens", "Has Conditions", "Has Health", "Terrain" },
 
-  TOKEN_SCALE          = { 0.3, 1, 0.3 }, -- token size (X/Z = diameter). Lower = smaller. TUNE.
+  TOKEN_SCALE          = { 0.4, 0.6, 0.4 }, -- token size (X/Z = diameter). Lower = smaller. TUNE.
   TOKEN_THICKNESS      = 0.2,
   TOKEN_MERGE_DISTANCE = 15,
 
@@ -32,7 +32,7 @@ local CONFIG = {
   --   [2] Y: + up off the table (keep small so it rests on the table)
   --   [3] Z: + far side of the play area,  - near you (the "bottom")
   -- Was {15,2,0}. Tune these; the console logs the anchor + pool coords.
-  POOL_OFFSET          = { 14, 1, -26 },
+  POOL_OFFSET          = { 12, 1, -30 },
 
   POLL_INTERVAL        = 0.5,
   MAX_TRIES            = 240,
