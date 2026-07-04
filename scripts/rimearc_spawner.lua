@@ -13,7 +13,7 @@ local CONFIG = {
   TOKEN_NAME  = "Rimearc",
   TOKEN_IMAGE = "https://i.imgur.com/W77V4kK.png",   -- transparent PNG
   TOKEN_TAGS  = { "Has Action", "Has Aid Tokens", "Has Conditions", "Has Health", "Terrain" },
-  TOKEN_XML   = '<Include src="Overlays/Overlay.xml" />',
+  TOKEN_XML   = '<Panel />',   -- match a real shadow's resting UI (NOT an <Include>)
 
   -- Custom_Token traces the image alpha -> clean shape, no whitespace.
   TOKEN_SCALE          = { 0.6, 1, 0.6 },  -- final PULLED-OUT (map) size; TUNE to a shadow.
