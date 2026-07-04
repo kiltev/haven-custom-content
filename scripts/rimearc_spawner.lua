@@ -1,203 +1,150 @@
 --[[ =========================================================================
-  Rimearc spawner  (design: R1 — custom condition as Quick-Menu trigger)
+  Rimearc infinite pool spawner  (design: P1 - native infinite bag)
 
-  Delivery: inject this onto the "Arctic Zephyr" character object via the CCC
-  perk trick (same vector as Dawnbringer/spawn_deck.lua). `self` = that object.
+  Inject onto the "Arctic Zephyr" character sheet via the CCC perk trick.
+  self = that sheet. On load it builds ONE infinite bag ~15 units to the
+  sheet's right, holding a fully-configured Rimearc token. Pull one out and
+  a Rimearc spawns with the shadow overlay behavior (conditions/aid/health/
+  action) - exactly like the Deathwalker shadow pool.
 
-  What it does, on load:
-    1. Registers the custom "Rimearc" condition (shows in the Quick Menu).
-    2. Fetches the tile's script (the cleaned token.lua) once and caches it.
-    3. Polls the class standee's state; on the Rimearc condition appearing
-       (absent -> present edge), imperatively spawns the Rimearc tile above
-       the standee's head, tagged + scripted + with the FHE overlay UI.
-
-  NOTE ON TRUST: like spawn_deck.lua, this replaces the host object's Lua and
-  runs code fetched from a raw URL. Same trust model you already use.
+  The condition/poll trigger is retired; this replaces it.
 ============================================================================ ]]
 
--- ============================== CONFIG ==================================
 local CONFIG = {
-  -- Custom condition (Quick Menu icon). Image reused from the token art.
-  CONDITION_NAME  = "Rimearc",
-  CONDITION_IMAGE = "https://i.imgur.com/W77V4kK.png",
-  CONDITION_MAX   = 1,
+  TOKEN_NAME  = "Rimearc",
+  TOKEN_IMAGE = "https://i.imgur.com/W77V4kK.png",   -- transparent PNG
+  TOKEN_TAGS  = { "Has Action", "Has Aid Tokens", "Has Conditions", "Has Health", "Terrain" },
+  TOKEN_XML   = '<Include src="Overlays/Overlay.xml" />',
 
-  -- The spawned tile ("Rimearc").
-  TOKEN_NAME      = "Rimearc",
-  TOKEN_IMAGE     = "https://i.imgur.com/W77V4kK.png",
-  TOKEN_TAGS      = { "Has Action", "Has Aid Tokens", "Has Conditions" },
-  TOKEN_XML       = '<Include src="Overlays/Overlay.xml" />', -- mod-global include
-  TILE_TYPE       = 2,               -- Custom_Tile: 0 sq, 1 hex, 2 circle, 3 rounded
-  TOKEN_SCALE     = { 0.35, 1, 0.35 },-- ~28mm circle. TUNE in-mod to match standee base.
-  TOKEN_THICKNESS = 0.1,
-  SPAWN_OFFSET    = { 0, 2, 0 },     -- above the standee's head
+  -- Custom_Token traces the image alpha -> clean shape, no whitespace.
+  TOKEN_SCALE          = { 0.6, 1, 0.6 },  -- final PULLED-OUT (map) size; TUNE to a shadow.
+  TOKEN_THICKNESS      = 0.2,
+  TOKEN_MERGE_DISTANCE = 15,
 
-  -- Raw URL of the cleaned token.lua (the tile's attached script).
-  -- >>> set this to wherever you host scripts/token.lua <<<
-  TOKEN_SCRIPT_URL = "https://raw.githubusercontent.com/OWNER/REPO/main/scripts/token.lua",
+  -- Raw URL of the tile script (the shadow Overlays.Overlay bundle).
+  -- Host that bundle as token.lua; keep ?v= and bump it on every change.
+  TOKEN_SCRIPT_URL = "https://raw.githubusercontent.com/kiltev/haven-unscorched/main/scripts/token.lua?v=1",
 
-  -- Which figure to watch.
-  STANDEE_NAME  = "Arctic Zephyr",
-  STANDEE_TAG   = "Character",
-  POLL_INTERVAL = 1,                 -- seconds
+  POOL_NAME         = "Rimearc Pool",
+  POOL_RIGHT_OFFSET = 15,   -- units to the sheet's right
+  POOL_UP_OFFSET    = 2,
 
-  -- Set false once the condition trigger is validated in-mod.
-  ENABLE_TEST_BUTTON = true,
-
-  -- Temporary: adds a "Dump Debug" button + per-poll logging to reveal how the
-  -- applied condition is stored on the standee. Turn off once detection works.
-  ENABLE_DEBUG = true,
+  ENABLE_DEBUG = true,      -- adds a "Rebuild Pool" button + scale logging
 }
--- =======================================================================
 
-local tokenScript = nil    -- cached token.lua text
-local conditionWasPresent = false
+local tokenScript = nil
 
 -- ---- helpers ----------------------------------------------------------
 
-local function findStandee()
-  for _, o in ipairs(getObjectsWithTag(CONFIG.STANDEE_TAG)) do
-    if o.getName() == CONFIG.STANDEE_NAME then return o end
-  end
-  -- fallback: match by name only
+local function poolExists()
   for _, o in ipairs(getObjects()) do
-    if o.getName() == CONFIG.STANDEE_NAME then return o end
+    if o.getName() == CONFIG.POOL_NAME then return o end
   end
   return nil
 end
 
--- Detect the condition by scanning the standee's serialized state.
--- No FHE read-API exists, so this is the pragmatic detector (VALIDATE in-mod:
--- confirm the condition name appears in the figure's script_state).
-local function standeeHasCondition(standee)
-  local state = standee.script_state
-  if not state or state == "" then return false end
-  return state:find(CONFIG.CONDITION_NAME, 1, true) ~= nil
+local function poolPosition()
+  local p = self.getPosition()
+  local r = self.getTransformRight()   -- sheet's right, unit vector
+  return {
+    p.x + r.x * CONFIG.POOL_RIGHT_OFFSET,
+    p.y + CONFIG.POOL_UP_OFFSET,
+    p.z + r.z * CONFIG.POOL_RIGHT_OFFSET,
+  }
 end
 
-local function spawnRimearc(standee)
-  if not tokenScript then
-    printToAll("[Rimearc] tile script not loaded yet - check TOKEN_SCRIPT_URL", "Yellow")
-    return
+-- Configure a freshly spawned token as a Rimearc.
+local function dressTemplate(o)
+  o.setCustomObject({
+    image = CONFIG.TOKEN_IMAGE,
+    thickness = CONFIG.TOKEN_THICKNESS,
+    merge_distance = CONFIG.TOKEN_MERGE_DISTANCE,
+    stackable = false,
+  })
+  o.setName(CONFIG.TOKEN_NAME)
+  o.setTags(CONFIG.TOKEN_TAGS)
+  o.setScale(CONFIG.TOKEN_SCALE)
+  o.UI.setXml(CONFIG.TOKEN_XML)
+  o.setLuaScript(tokenScript)
+  o.reload()
+end
+
+local function buildPool()
+  if poolExists() then
+    printToAll("[Rimearc] pool already exists", "Yellow"); return
   end
-  local p = standee and standee.getPosition() or self.getPosition()
-  local pos = { p.x + CONFIG.SPAWN_OFFSET[1], p.y + CONFIG.SPAWN_OFFSET[2], p.z + CONFIG.SPAWN_OFFSET[3] }
+  if not tokenScript then
+    printToAll("[Rimearc] token script not loaded - check TOKEN_SCRIPT_URL", "Red"); return
+  end
+
+  local pos = poolPosition()
 
   spawnObject({
-    type = "Custom_Tile",
+    type = "Infinite_Bag",
     position = pos,
-    rotation = { 0, 0, 0 },
-    scale = CONFIG.TOKEN_SCALE,
     sound = false,
-    callback_function = function(o)
-      o.setCustomObject({
-        image = CONFIG.TOKEN_IMAGE,
-        type = CONFIG.TILE_TYPE,
-        thickness = CONFIG.TOKEN_THICKNESS,
-        stackable = false,
+    callback_function = function(bag)
+      bag.setName(CONFIG.POOL_NAME)
+
+      spawnObject({
+        type = "Custom_Token",
+        position = { pos[1], pos[2] + 3, pos[3] },
+        scale = CONFIG.TOKEN_SCALE,
+        sound = false,
+        callback_function = function(tok)
+          dressTemplate(tok)
+          -- wait until the custom image + script are applied, then store it
+          -- as the bag's template (putObject captures the object's data).
+          Wait.condition(function()
+            if CONFIG.ENABLE_DEBUG then
+              local s = tok.getScale()
+              log(string.format("[Rimearc] template scale = %.3f, %.3f, %.3f", s.x, s.y, s.z))
+            end
+            bag.putObject(tok)
+            printToAll("[Rimearc] pool built - pull a Rimearc from it.", "Green")
+          end, function()
+            return not tok.spawning and not tok.loading_custom
+          end)
+        end,
       })
-      o.setName(CONFIG.TOKEN_NAME)
-      o.setTags(CONFIG.TOKEN_TAGS)
-      o.UI.setXml(CONFIG.TOKEN_XML)
-      o.setLuaScript(tokenScript)
-      o.reload()
     end,
   })
 end
 
--- ---- FHE api ----------------------------------------------------------
-
--- FHE api_* functions receive POSITIONAL args, packed via table.pack(...)
--- (see ApiConsumer in token.lua). So registerCondition(name, condition) must
--- arrive as params[1]=name, params[2]=condition. pcall-guarded so a failure
--- can never abort onLoad.
-local function registerCondition()
-  local ok, err = pcall(function()
-    Global.call("api_condition_registerCondition", {
-      [1] = CONFIG.CONDITION_NAME,
-      [2] = { image = CONFIG.CONDITION_IMAGE, max = CONFIG.CONDITION_MAX },
-      n = 2,
-    })
-  end)
-  if not ok then
-    printToAll("[Rimearc] registerCondition failed: " .. tostring(err), "Red")
-  end
-end
-
--- ---- poll loop --------------------------------------------------------
-
-local function poll()
-  local standee = findStandee()
-  if standee then
-    local present = standeeHasCondition(standee)
-    if CONFIG.ENABLE_DEBUG then
-      local st = standee.script_state or ""
-      log("[Rimearc poll] standee='" .. standee.getName() .. "' state_len=" .. #st ..
-          " has('" .. CONFIG.CONDITION_NAME .. "')=" .. tostring(present))
-    end
-    if present and not conditionWasPresent then
-      spawnRimearc(standee)          -- edge trigger: absent -> present
-    end
-    conditionWasPresent = present
-  elseif CONFIG.ENABLE_DEBUG then
-    log("[Rimearc poll] standee NOT FOUND (name='" .. CONFIG.STANDEE_NAME ..
-        "', tag='" .. CONFIG.STANDEE_TAG .. "')")
-  end
-  Wait.time(poll, CONFIG.POLL_INTERVAL)
-end
-
--- Prints the standee's full serialized state so we can see how the applied
--- condition is encoded, then write a correct detector.
-function onDumpDebug()
-  local standee = findStandee()
-  if not standee then
-    printToAll("[Rimearc] standee '" .. CONFIG.STANDEE_NAME .. "' NOT FOUND", "Red")
-    return
-  end
-  printToAll("[Rimearc] tokenScript loaded=" .. tostring(tokenScript ~= nil), "White")
-  printToAll("[Rimearc] standee tags: " .. table.concat(standee.getTags(), ", "), "White")
-  local st = standee.script_state or ""
-  printToAll("[Rimearc] script_state length=" .. #st, "White")
-  log("[Rimearc] FULL script_state of '" .. standee.getName() .. "':")
-  log(st)
+local function rebuildPool()
+  local existing = poolExists()
+  if existing then existing.destruct() end
+  Wait.time(buildPool, 0.5)
 end
 
 -- ---- entry ------------------------------------------------------------
 
 function onLoad()
-  -- Button + fetch + poll FIRST, so a condition-API failure can never abort them.
-  if CONFIG.ENABLE_TEST_BUTTON then
+  if CONFIG.ENABLE_DEBUG then
     self.createButton({
-      click_function = "onTestSpawn", function_owner = self,
-      label = "Spawn Rimearc", position = { 0, 0.5, 0 },
-      width = 1200, height = 400, font_size = 200,
+      click_function = "onRebuildPool", function_owner = self,
+      label = "Rebuild Rimearc Pool", position = { 0, 0.5, 0 },
+      width = 1600, height = 400, font_size = 180,
       color = { 0, 0, 0, 0.9 }, font_color = { 1, 1, 1, 1 },
     })
   end
 
-  if CONFIG.ENABLE_DEBUG then
-    self.createButton({
-      click_function = "onDumpDebug", function_owner = self,
-      label = "Dump Debug", position = { 0, 0.5, 1.2 },
-      width = 1000, height = 300, font_size = 160,
-      color = { 0.2, 0.2, 0.2, 0.9 }, font_color = { 1, 1, 0, 1 },
-    })
-  end
-
   WebRequest.get(CONFIG.TOKEN_SCRIPT_URL, function(r)
-    if r.text and not r.is_error then
-      tokenScript = r.text
+    if r.is_error then
+      printToAll("[Rimearc] token.lua fetch error: " .. tostring(r.error), "Red")
+    elseif r.response_code ~= 200 then
+      printToAll("[Rimearc] token.lua HTTP " .. tostring(r.response_code) ..
+                 " - check TOKEN_SCRIPT_URL (still 'OWNER/REPO'?)", "Red")
+    elseif not r.text or r.text == "" then
+      printToAll("[Rimearc] token.lua returned empty body", "Red")
     else
-      printToAll("[Rimearc] failed to fetch token.lua: " .. tostring(r.error), "Red")
+      tokenScript = r.text
+      printToAll("[Rimearc] token.lua loaded (" .. #r.text .. " bytes)", "Green")
+      if not poolExists() then buildPool() end
     end
   end)
-
-  Wait.time(poll, CONFIG.POLL_INTERVAL)
-
-  -- Last + pcall-guarded: worst case the icon is missing, everything else works.
-  registerCondition()
 end
 
-function onTestSpawn()
-  spawnRimearc(findStandee())
+function onRebuildPool()
+  rebuildPool()
 end
