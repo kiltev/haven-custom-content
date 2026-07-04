@@ -103,14 +103,21 @@ end
 
 -- ---- FHE api ----------------------------------------------------------
 
--- Register the condition via the same Global-call convention token.lua uses
--- for api_action_*.  VALIDATE: if the icon never appears, the Global function
--- name differs - report it and we adjust.
+-- FHE api_* functions receive POSITIONAL args, packed via table.pack(...)
+-- (see ApiConsumer in token.lua). So registerCondition(name, condition) must
+-- arrive as params[1]=name, params[2]=condition. pcall-guarded so a failure
+-- can never abort onLoad.
 local function registerCondition()
-  Global.call("api_condition_registerCondition", {
-    conditionName = CONFIG.CONDITION_NAME,
-    condition = { image = CONFIG.CONDITION_IMAGE, max = CONFIG.CONDITION_MAX },
-  })
+  local ok, err = pcall(function()
+    Global.call("api_condition_registerCondition", {
+      [1] = CONFIG.CONDITION_NAME,
+      [2] = { image = CONFIG.CONDITION_IMAGE, max = CONFIG.CONDITION_MAX },
+      n = 2,
+    })
+  end)
+  if not ok then
+    printToAll("[Rimearc] registerCondition failed: " .. tostring(err), "Red")
+  end
 end
 
 -- ---- poll loop --------------------------------------------------------
@@ -130,16 +137,7 @@ end
 -- ---- entry ------------------------------------------------------------
 
 function onLoad()
-  registerCondition()
-
-  WebRequest.get(CONFIG.TOKEN_SCRIPT_URL, function(r)
-    if r.text and not r.is_error then
-      tokenScript = r.text
-    else
-      printToAll("[Rimearc] failed to fetch token.lua: " .. tostring(r.error), "Red")
-    end
-  end)
-
+  -- Button + fetch + poll FIRST, so a condition-API failure can never abort them.
   if CONFIG.ENABLE_TEST_BUTTON then
     self.createButton({
       click_function = "onTestSpawn", function_owner = self,
@@ -149,7 +147,18 @@ function onLoad()
     })
   end
 
+  WebRequest.get(CONFIG.TOKEN_SCRIPT_URL, function(r)
+    if r.text and not r.is_error then
+      tokenScript = r.text
+    else
+      printToAll("[Rimearc] failed to fetch token.lua: " .. tostring(r.error), "Red")
+    end
+  end)
+
   Wait.time(poll, CONFIG.POLL_INTERVAL)
+
+  -- Last + pcall-guarded: worst case the icon is missing, everything else works.
+  registerCondition()
 end
 
 function onTestSpawn()
