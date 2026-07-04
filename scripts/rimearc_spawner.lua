@@ -17,7 +17,7 @@ local CONFIG = {
   TOKEN_IMAGE          = "https://i.imgur.com/W77V4kK.png", -- transparent PNG
   TOKEN_TAGS           = { "Has Action", "Has Aid Tokens", "Has Conditions", "Has Health", "Terrain" },
 
-  TOKEN_SCALE          = { 0.4, 0.6, 0.4 }, -- token size (X/Z = diameter). Lower = smaller. TUNE.
+  TOKEN_SCALE          = { 0.35, 0.6, 0.35 }, -- token size (X/Z = diameter). Lower = smaller. TUNE.
   TOKEN_THICKNESS      = 0.2,
   TOKEN_MERGE_DISTANCE = 15,
 
