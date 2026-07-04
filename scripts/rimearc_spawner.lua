@@ -37,7 +37,7 @@ local CONFIG = {
   TOKEN_SCRIPT_URL = "https://raw.githubusercontent.com/OWNER/REPO/main/scripts/token.lua",
 
   -- Which figure to watch.
-  STANDEE_NAME  = "Arctyc Zephyr",
+  STANDEE_NAME  = "Arctic Zephyr",
   STANDEE_TAG   = "Character",
   POLL_INTERVAL = 1,                 -- seconds
 
