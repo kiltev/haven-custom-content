@@ -1,7 +1,7 @@
 --[[ =========================================================================
   Rimearc spawner  (design: R1 — custom condition as Quick-Menu trigger)
 
-  Delivery: inject this onto the "Arctyc Zephyr" character object via the CCC
+  Delivery: inject this onto the "Arctic Zephyr" character object via the CCC
   perk trick (same vector as Dawnbringer/spawn_deck.lua). `self` = that object.
 
   What it does, on load:
