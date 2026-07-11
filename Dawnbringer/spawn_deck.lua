@@ -1,7 +1,7 @@
 local TARGET_GUID = "dawnbringer-sheet"
 local DECK = "Dawnbringer Master Deck"
-local OFFSET = {-1.5, 1.2, 10.5}        
-local FACE = "https://github.com/kiltev/haven-custom-content/blob/main/Dawnbringer/items-front.png?raw=true&v=6"
+local OFFSET = { -1.5, 1.2, 10.5 }
+local FACE = "https://github.com/kiltev/haven-custom-content/blob/main/Dawnbringer/items-front.png?raw=true&v=7"
 local BACK = "https://github.com/kiltev/haven-custom-content/blob/main/Dawnbringer/items-back.png?raw=true&v=1"
 
 local S = [==[
@@ -11,20 +11,15 @@ end
 function triggerSplit()
  self.clearButtons()
  local cards = self.spread(1)
- local sizes, p, stepX, stepZ = {4,3,3,2,2,3,4,1,2}, self.getPosition(), 2.5, 3.5
+ local p, stepX, stepZ = self.getPosition(), 2.5, 3.5
+ local names = {"Concussive Quarrel","Corrosive Darts","Silver Bolts","Smoke Bomb","Unstable Flask","Jagged Caltrops","Harpoon Tether","Ancient Technology","Mutagen Syringe"}
  Wait.frames(function()
-  local k, g = 1, 9
-  for i, n in ipairs(sizes) do
+  for i=1, 9 do
    local row, col = math.floor((i-1)/5), (i-1)%5
    local pos = {p.x + col*stepX, p.y + 1, p.z - row*stepZ}
-   local name = "Dawnbringer Group "..g
-   g = g - 1
-   for c=1, n do
-    if cards[k] then
-     cards[k].setName(name)
-     cards[k].setPositionSmooth({pos[1], pos[2] + c*.05, pos[3]}, false, false)
-    end
-    k = k + 1
+   if cards[i] then
+    cards[i].setName(names[i])
+    cards[i].setPositionSmooth(pos, false, false)
    end
   end
  end, 2)
@@ -42,12 +37,12 @@ local function spawnNear(o)
     local p = o.getPosition()
     spawnObject({
         type = "DeckCustom",
-        position = {p.x + OFFSET[1], p.y + OFFSET[2], p.z + OFFSET[3]},
-        rotation = {0, 180, 0},
-        scale = {.73, 1, .73},
+        position = { p.x + OFFSET[1], p.y + OFFSET[2], p.z + OFFSET[3] },
+        rotation = { 0, 180, 0 },
+        scale = { .73, 1, .73 },
         sound = false,
         callback_function = function(deckObj)
-            deckObj.setCustomObject({face = FACE, back = BACK, width = 3, height = 8, number = 24, back_is_hidden = true, unique_back = true})
+            deckObj.setCustomObject({ face = FACE, back = BACK, width = 3, height = 3, number = 9, back_is_hidden = true, unique_back = true })
             deckObj.setName(DECK)
             deckObj.setLuaScript(S)
             deckObj.reload()
@@ -64,12 +59,12 @@ Wait.time(function()
     local sheet = getObjectFromGUID(TARGET_GUID)
     if sheet then
         local p = sheet.getPosition()
-        if last and math.abs(p.x-last.x) < 0.05 and math.abs(p.y-last.y) < 0.05 and math.abs(p.z-last.z) < 0.05 then
+        if last and math.abs(p.x - last.x) < 0.05 and math.abs(p.y - last.y) < 0.05 and math.abs(p.z - last.z) < 0.05 then
             stable = stable + 1
         else
             stable = 0
         end
-        last = {x=p.x, y=p.y, z=p.z}
+        last = { x = p.x, y = p.y, z = p.z }
 
         if stable >= 3 then
             done = true
